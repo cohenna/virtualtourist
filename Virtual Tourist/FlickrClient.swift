@@ -8,22 +8,30 @@
 
 import Foundation
 
-let BASE_URL = "https://api.flickr.com/services/rest/"
-let METHOD_NAME = "flickr.photos.search"
-let API_KEY = "ENTER_YOUR_API_KEY_HERE"
-let EXTRAS = "url_m"
-let SAFE_SEARCH = "1"
-let DATA_FORMAT = "json"
-let NO_JSON_CALLBACK = "1"
-let BOUNDING_BOX_HALF_WIDTH = 1.0
-let BOUNDING_BOX_HALF_HEIGHT = 1.0
-let LAT_MIN = -90.0
-let LAT_MAX = 90.0
-let LON_MIN = -180.0
-let LON_MAX = 180.0
-let baseImageURLString = BASE_URL
+enum FlickrClientError {
+    case Download
+    case Other
+}
+
 
 class FlickrClient : NSObject {
+    var BASE_URL : String = "https://api.flickr.com/services/rest/"
+    var METHOD_NAME = "flickr.photos.search"
+    var API_KEY = "4927882cfd72bc3487e549cec77d41f8"
+    var API_SECRET = "6c103f8fdba32219"
+    var EXTRAS = "url_m"
+    var SAFE_SEARCH = "1"
+    var DATA_FORMAT = "json"
+    var NO_JSON_CALLBACK = "1"
+    var BOUNDING_BOX_HALF_WIDTH = 1.0
+    var BOUNDING_BOX_HALF_HEIGHT = 1.0
+    var LAT_MIN = -90.0
+    var LAT_MAX = 90.0
+    var LON_MIN = -180.0
+    var LON_MAX = 180.0
+    
+    static let ERROR_DOMAIN = "FlickrClient"
+    //var baseImageURLString : String = BASE_URL
     
     
     /* Shared session */
@@ -230,6 +238,149 @@ class FlickrClient : NSObject {
         
         return Singleton.sharedInstance
     }
+    
+    
+    func createBoundingBoxString(latitude : Double, longitude : Double) -> String {
+        /* Fix added to ensure box is bounded by minimum and maximums */
+        let bottom_left_lon = max(longitude - BOUNDING_BOX_HALF_WIDTH, LON_MIN)
+        let bottom_left_lat = max(latitude - BOUNDING_BOX_HALF_HEIGHT, LAT_MIN)
+        let top_right_lon = min(longitude + BOUNDING_BOX_HALF_HEIGHT, LON_MAX)
+        let top_right_lat = min(latitude + BOUNDING_BOX_HALF_HEIGHT, LAT_MAX)
+        
+        return "\(bottom_left_lon),\(bottom_left_lat),\(top_right_lon),\(top_right_lat)"
+    }
+    
+    
+    func getLatLonString(latitude : Double, longitude : Double) -> String {
+        return "(\(latitude), \(longitude))"
+    }
+    
+    /* Function makes first request to get a random page, then it makes a request to get an image with the random page */
+    func getImageFromFlickrBySearch(methodArguments: [String : AnyObject], completionHandler: (result: AnyObject!, error: NSError) -> Void) {
+        
+        let session = NSURLSession.sharedSession()
+        let urlString = BASE_URL + FlickrClient.escapedParameters(methodArguments)
+        let url = NSURL(string: urlString)!
+        let request = NSURLRequest(URL: url)
+        
+        let task = session.dataTaskWithRequest(request) {data, response, downloadError in
+            if let error = downloadError {
+                println("Could not complete the request \(error)")
+                completionHandler(result: nil, error: NSError(domain: FlickrClient.ERROR_DOMAIN, code: -1003, userInfo: nil))
+            } else {
+                
+                var parsingError: NSError? = nil
+                let parsedResult = NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions.AllowFragments, error: &parsingError) as! NSDictionary
+                
+                if let photosDictionary = parsedResult.valueForKey("photos") as? [String:AnyObject] {
+                    
+                    if let totalPages = photosDictionary["pages"] as? Int {
+                        
+                        /* Flickr API - will only return up the 4000 images (100 per page * 40 page max) */
+                        let pageLimit = min(totalPages, 40)
+                        let randomPage = Int(arc4random_uniform(UInt32(pageLimit))) + 1
+                        self.getImageFromFlickrBySearchWithPage(methodArguments, pageNumber: randomPage, completionHandler: completionHandler)
+                        
+                    } else {
+                        println("Cant find key 'pages' in \(photosDictionary)")
+                        completionHandler(result: nil, error: NSError(domain: FlickrClient.ERROR_DOMAIN, code: -1001, userInfo: nil))
+                    }
+                } else {
+                    println("Cant find key 'photos' in \(parsedResult)")
+                    completionHandler(result: nil, error: NSError(domain: FlickrClient.ERROR_DOMAIN, code: -1002, userInfo: nil))
+                }
+            }
+        }
+        
+        task.resume()
+    }
+    
+    func getPhotos(latitude: Double, longitude: Double, completionHandler: (result: AnyObject!, error: NSError) -> Void) {
+        let methodArguments = [
+            "method": METHOD_NAME,
+            "api_key": API_KEY,
+            "bbox": createBoundingBoxString(latitude, longitude: longitude),
+            "safe_search": SAFE_SEARCH,
+            "extras": EXTRAS,
+            "format": DATA_FORMAT,
+            "nojsoncallback": NO_JSON_CALLBACK
+        ]
+        getImageFromFlickrBySearch(methodArguments, completionHandler: completionHandler)
+    }
+    
+    func getImageFromFlickrBySearchWithPage(methodArguments: [String : AnyObject], pageNumber: Int, completionHandler: (result: AnyObject!, error: NSError) -> Void) {
+      
+        /* Add the page to the method's arguments */
+        /*var withPageDictionary = methodArguments
+        withPageDictionary["page"] = pageNumber
+        
+        let session = NSURLSession.sharedSession()
+        let urlString = BASE_URL + FlickrClient.escapedParameters(withPageDictionary)
+        let url = NSURL(string: urlString)!
+        let request = NSURLRequest(URL: url)
+        
+        let task = session.dataTaskWithRequest(request) {data, response, downloadError in
+            if let error = downloadError {
+                println("Could not complete the request \(error)")
+            } else {
+                var parsingError: NSError? = nil
+                let parsedResult = NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions.AllowFragments, error: &parsingError) as! NSDictionary
+                
+                if let photosDictionary = parsedResult.valueForKey("photos") as? [String:AnyObject] {
+                    
+                    var totalPhotosVal = 0
+                    if let totalPhotos = photosDictionary["total"] as? String {
+                        totalPhotosVal = (totalPhotos as NSString).integerValue
+                    }
+                    
+                    if totalPhotosVal > 0 {
+                        if let photosArray = photosDictionary["photo"] as? [[String: AnyObject]] {
+                            
+                            let randomPhotoIndex = Int(arc4random_uniform(UInt32(photosArray.count)))
+                            let photoDictionary = photosArray[randomPhotoIndex] as [String: AnyObject]
+                            
+                            let photoTitle = photoDictionary["title"] as? String
+                            let imageUrlString = photoDictionary["url_m"] as? String
+                            let imageURL = NSURL(string: imageUrlString!)
+                            
+                            if let imageData = NSData(contentsOfURL: imageURL!) {
+                                dispatch_async(dispatch_get_main_queue(), {
+                                    self.defaultLabel.alpha = 0.0
+                                    self.photoImageView.image = UIImage(data: imageData)
+                                    
+                                    if methodArguments["bbox"] != nil {
+                                        self.photoTitleLabel.text = "\(self.getLatLonString()) \(photoTitle!)"
+                                    } else {
+                                        self.photoTitleLabel.text = "\(photoTitle!)"
+                                    }
+                                    
+                                })
+                            } else {
+                                println("Image does not exist at \(imageURL)")
+                            }
+                        } else {
+                            println("Cant find key 'photo' in \(photosDictionary)")
+                        }
+                    } else {
+                        dispatch_async(dispatch_get_main_queue(), {
+                            self.photoTitleLabel.text = "No Photos Found. Search Again."
+                            self.defaultLabel.alpha = 1.0
+                            self.photoImageView.image = nil
+                        })
+                    }
+                } else {
+                    println("Cant find key 'photos' in \(parsedResult)")
+                }
+            }
+        }
+        
+        task.resume()
+*/
+    }
+    
+    
+    
+    
     
     /*func getStudentLocations(uniqueKey : String?, limit : Int?, offset : Int?, allowDuplicates: Bool, completionHandler: (result: [StudentLocation]?, error: NSError?) -> Void) {
         var parameters = [String:AnyObject]()

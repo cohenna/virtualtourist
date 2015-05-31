@@ -12,7 +12,13 @@ import CoreData
 
 class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetchedResultsControllerDelegate {
     
+    let MapCenterLatitudeKey = "Map Center Latitude Key"
+    let MapCenterLongitudeKey = "Map Center Longitude Key"
+    let MapSpanLatitude = "Map Span Latitude Key"
+    let MapSpanLongitude = "Map Span Longitude Key"
+    
     @IBOutlet weak var mapView: MKMapView!
+    var pinToMapDictionary = [MKPointAnnotation: Pin]()
     
     var sharedContext: NSManagedObjectContext {
         return CoreDataStackManager.sharedInstance().managedObjectContext!
@@ -22,27 +28,49 @@ class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetc
     
     func mapView(mapView: MKMapView!, didSelectAnnotationView view: MKAnnotationView!) {
         println("mapView didSelectAnnotationView")
-        if var point = view.annotation as? MKPointAnnotation {
-            println("\(point.title) \(point.subtitle)")
+        // TODO: open up the photo album for this pin
+        if let pa = view.annotation as? MKPointAnnotation {
+            if let pin = pinToMapDictionary[pa] {
+                performSegueWithIdentifier("showPhotoAlbum", sender: pin)
+            } else {
+                println("key value pin does not exist in MKPointAnnotation")
+            }
         } else {
-            
+            println("annotation is not an MKPointAnnotation")
+        }
+    }
+    
+    override func prefersStatusBarHidden() -> Bool {
+        return true
+    }
+    
+    override func preferredStatusBarUpdateAnimation() -> UIStatusBarAnimation {
+        return UIStatusBarAnimation.Fade
+    }
+    
+    override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
+        if segue.identifier == "showPhotoAlbum" {
+            (segue.destinationViewController as! PhotoAlbumViewController).pin = sender as? Pin
         }
     }
     
     
-    
     func mapView(mapView: MKMapView!, viewForAnnotation annotation: MKAnnotation!) -> MKAnnotationView! {
-        println("mapView viewForAnnotation")
-        // TODO: open up the photo album for this pin
+        //println("mapView viewForAnnotation")
+        
         return nil
-        var annotationView = MKPinAnnotationView(annotation: annotation!, reuseIdentifier: "")
-        annotationView.canShowCallout = true
-        annotationView.rightCalloutAccessoryView = UIButton.buttonWithType(UIButtonType.DetailDisclosure) as! UIView
-        return annotationView
+    }
+    
+    func addPinToMapWithPin(pin : Pin) -> MKPointAnnotation {
+        var coordinate = (CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude))
+        let pa = addPinToMap(coordinate)
+        pinToMapDictionary[pa] = pin
+        return pa
     }
     
     func addPinToMap(coordinate : CLLocationCoordinate2D) -> MKPointAnnotation {
         let pa = MKPointAnnotation()
+        
         pa.coordinate = coordinate
         //pa.title = "Hello"
         
@@ -89,6 +117,7 @@ class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetc
                 pin.latitude = touchMapCoordinate.latitude
                 pin.longitude = touchMapCoordinate.longitude
                 
+                
                 CoreDataStackManager.sharedInstance().saveContext()
 
             }
@@ -130,6 +159,9 @@ class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetc
             case .Delete:
                 //tableView.insertRowsAtIndexPaths([newIndexPath!], withRowAnimation: .Fade)
                 // can probably remove more efficiently, i.e. perhaps by limiting search set via annotationsInMapRect
+                
+                
+                
                 for annotation in mapView.annotations {
                     if let a = annotation as? MKPointAnnotation {
                         if (a.coordinate.latitude == pin.latitude && a.coordinate.longitude == pin.longitude) {
@@ -140,8 +172,10 @@ class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetc
                 break
             case .Insert:
                 //tableView.deleteRowsAtIndexPaths([indexPath!], withRowAnimation: .Fade)
-                addPinToMap(CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude))
+                addPinToMapWithPin(pin)
                 break
+            case .Update:
+                return
             default:
                 return
             }
@@ -197,11 +231,42 @@ class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetc
         // add pins already in CoreData
         for object in fetchedResultsController.fetchedObjects! {
             let pin = object as! Pin
-            addPinToMap(CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude))
+            addPinToMapWithPin(pin)
         }
         
         println("viewDidLoad complete")
                 
+    }
+    
+    override func viewWillAppear(animated: Bool) {
+        super.viewWillAppear(animated)
+     
+        // restore map state
+        if let centerLat = NSUserDefaults.standardUserDefaults().valueForKey(MapCenterLatitudeKey) as? Double,
+        centerLng = NSUserDefaults.standardUserDefaults().valueForKey(MapCenterLongitudeKey) as? Double,
+        spanLat = NSUserDefaults.standardUserDefaults().valueForKey(MapSpanLatitude) as? Double,
+        spanLng = NSUserDefaults.standardUserDefaults().valueForKey(MapSpanLongitude) as? Double {
+            println("restoring map state")
+            let span = MKCoordinateSpan(latitudeDelta: spanLat, longitudeDelta: spanLng)
+            let center = CLLocationCoordinate2D(latitude: centerLat, longitude: centerLng)
+            mapView.setRegion(MKCoordinateRegion(center: center, span: span), animated: false)
+            mapView.setCenterCoordinate(center, animated: false)
+                
+        } else {
+            println("not restoring map state")
+        }
+    }
+    
+    override func viewWillDisappear(animated: Bool) {
+        super.viewWillDisappear(animated)
+        // save map state
+        NSUserDefaults.standardUserDefaults().setDouble(mapView.centerCoordinate.latitude, forKey: MapCenterLatitudeKey)
+        NSUserDefaults.standardUserDefaults().setDouble(mapView.centerCoordinate.longitude, forKey: MapCenterLongitudeKey)
+        NSUserDefaults.standardUserDefaults().setDouble(mapView.region.span.latitudeDelta, forKey: MapSpanLatitude)
+        NSUserDefaults.standardUserDefaults().setDouble(mapView.region.span.longitudeDelta, forKey: MapSpanLongitude)
+        println("saved map state")
+
+
     }
 
     override func didReceiveMemoryWarning() {
