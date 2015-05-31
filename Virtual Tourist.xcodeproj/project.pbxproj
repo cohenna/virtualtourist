@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0191B27C1B1B5788004A83DC /* PhotoAlbumViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0191B27B1B1B5788004A83DC /* PhotoAlbumViewController.swift */; };
+		0191B27E1B1BA69C004A83DC /* PhotoDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0191B27D1B1BA69C004A83DC /* PhotoDownloader.swift */; };
 		D163B4A41B18C52C00F1855D /* CoreDataStackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D163B4A31B18C52C00F1855D /* CoreDataStackManager.swift */; };
 		D163B4A71B18C5FA00F1855D /* Model.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = D163B4A51B18C5FA00F1855D /* Model.xcdatamodeld */; };
 		D163B4AC1B18C6F000F1855D /* Pin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D163B4AB1B18C6F000F1855D /* Pin.swift */; };
@@ -34,6 +35,7 @@
 
 /* Begin PBXFileReference section */
 		0191B27B1B1B5788004A83DC /* PhotoAlbumViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PhotoAlbumViewController.swift; sourceTree = "<group>"; };
+		0191B27D1B1BA69C004A83DC /* PhotoDownloader.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PhotoDownloader.swift; sourceTree = "<group>"; };
 		D163B4A31B18C52C00F1855D /* CoreDataStackManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CoreDataStackManager.swift; sourceTree = "<group>"; };
 		D163B4A61B18C5FA00F1855D /* Model.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = Model.xcdatamodel; sourceTree = "<group>"; };
 		D163B4AB1B18C6F000F1855D /* Pin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Pin.swift; sourceTree = "<group>"; };
@@ -138,6 +140,7 @@
 				D163B4AD1B18C71900F1855D /* Photo.swift */,
 				D163B4AB1B18C6F000F1855D /* Pin.swift */,
 				D16D230C1B185E4200FEA0BD /* Flickr */,
+				0191B27D1B1BA69C004A83DC /* PhotoDownloader.swift */,
 			);
 			name = Model;
 			sourceTree = "<group>";
@@ -257,6 +260,7 @@
 				D163B4A71B18C5FA00F1855D /* Model.xcdatamodeld in Sources */,
 				D163B4AC1B18C6F000F1855D /* Pin.swift in Sources */,
 				D16D22EC1B185E2800FEA0BD /* AppDelegate.swift in Sources */,
+				0191B27E1B1BA69C004A83DC /* PhotoDownloader.swift in Sources */,
 				D16D230E1B185E5700FEA0BD /* FlickrClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

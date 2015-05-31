@@ -17,6 +17,7 @@ class Photo : NSManagedObject {
     @NSManaged var localPath: String?
     @NSManaged var url: String
     @NSManaged var pin: Pin?
+    @NSManaged var title: String?
     
     override init(entity: NSEntityDescription, insertIntoManagedObjectContext context: NSManagedObjectContext?) {
         super.init(entity: entity, insertIntoManagedObjectContext: context)

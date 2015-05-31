@@ -29,6 +29,7 @@ class FlickrClient : NSObject {
     var LAT_MAX = 90.0
     var LON_MIN = -180.0
     var LON_MAX = 180.0
+    var PHOTOS_PER_PAGE = 48
     
     static let ERROR_DOMAIN = "FlickrClient"
     //var baseImageURLString : String = BASE_URL
@@ -256,7 +257,7 @@ class FlickrClient : NSObject {
     }
     
     /* Function makes first request to get a random page, then it makes a request to get an image with the random page */
-    func getImageFromFlickrBySearch(methodArguments: [String : AnyObject], completionHandler: (result: AnyObject!, error: NSError) -> Void) {
+    func getImageFromFlickrBySearch(methodArguments: [String : AnyObject], completionHandler: (result: AnyObject?, error: NSError?) -> Void) {
         
         let session = NSURLSession.sharedSession()
         let urlString = BASE_URL + FlickrClient.escapedParameters(methodArguments)
@@ -276,10 +277,10 @@ class FlickrClient : NSObject {
                     
                     if let totalPages = photosDictionary["pages"] as? Int {
                         
-                        /* Flickr API - will only return up the 4000 images (100 per page * 40 page max) */
-                        let pageLimit = min(totalPages, 40)
+                        /* Flickr API - will only return up the 4000 images (10 per page * 400 page max) */
+                        let pageLimit = min(totalPages, 4000/self.PHOTOS_PER_PAGE)
                         let randomPage = Int(arc4random_uniform(UInt32(pageLimit))) + 1
-                        self.getImageFromFlickrBySearchWithPage(methodArguments, pageNumber: randomPage, completionHandler: completionHandler)
+                        self.getImagesFromFlickrBySearchWithPage(methodArguments, pageNumber: randomPage, completionHandler: completionHandler)
                         
                     } else {
                         println("Cant find key 'pages' in \(photosDictionary)")
@@ -295,7 +296,7 @@ class FlickrClient : NSObject {
         task.resume()
     }
     
-    func getPhotos(latitude: Double, longitude: Double, completionHandler: (result: AnyObject!, error: NSError) -> Void) {
+    func getPhotos(latitude: Double, longitude: Double, completionHandler: (result: AnyObject?, error: NSError?) -> Void) {
         let methodArguments = [
             "method": METHOD_NAME,
             "api_key": API_KEY,
@@ -303,15 +304,17 @@ class FlickrClient : NSObject {
             "safe_search": SAFE_SEARCH,
             "extras": EXTRAS,
             "format": DATA_FORMAT,
-            "nojsoncallback": NO_JSON_CALLBACK
+            "nojsoncallback": NO_JSON_CALLBACK,
+            "per_page": "\(PHOTOS_PER_PAGE)",
+            
         ]
         getImageFromFlickrBySearch(methodArguments, completionHandler: completionHandler)
     }
     
-    func getImageFromFlickrBySearchWithPage(methodArguments: [String : AnyObject], pageNumber: Int, completionHandler: (result: AnyObject!, error: NSError) -> Void) {
+    func getImagesFromFlickrBySearchWithPage(methodArguments: [String : AnyObject], pageNumber: Int, completionHandler: (result: AnyObject?, error: NSError?) -> Void) {
       
         /* Add the page to the method's arguments */
-        /*var withPageDictionary = methodArguments
+        var withPageDictionary = methodArguments
         withPageDictionary["page"] = pageNumber
         
         let session = NSURLSession.sharedSession()
@@ -322,6 +325,8 @@ class FlickrClient : NSObject {
         let task = session.dataTaskWithRequest(request) {data, response, downloadError in
             if let error = downloadError {
                 println("Could not complete the request \(error)")
+                completionHandler(result: nil, error: NSError(domain: FlickrClient.ERROR_DOMAIN, code: -1004, userInfo: nil))
+
             } else {
                 var parsingError: NSError? = nil
                 let parsedResult = NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions.AllowFragments, error: &parsingError) as! NSDictionary
@@ -335,13 +340,15 @@ class FlickrClient : NSObject {
                     
                     if totalPhotosVal > 0 {
                         if let photosArray = photosDictionary["photo"] as? [[String: AnyObject]] {
-                            
+                            completionHandler(result: photosArray, error: nil)
+                            /*
                             let randomPhotoIndex = Int(arc4random_uniform(UInt32(photosArray.count)))
                             let photoDictionary = photosArray[randomPhotoIndex] as [String: AnyObject]
                             
                             let photoTitle = photoDictionary["title"] as? String
                             let imageUrlString = photoDictionary["url_m"] as? String
                             let imageURL = NSURL(string: imageUrlString!)
+
                             
                             if let imageData = NSData(contentsOfURL: imageURL!) {
                                 dispatch_async(dispatch_get_main_queue(), {
@@ -357,25 +364,27 @@ class FlickrClient : NSObject {
                                 })
                             } else {
                                 println("Image does not exist at \(imageURL)")
-                            }
+                            }*/
                         } else {
                             println("Cant find key 'photo' in \(photosDictionary)")
+                            completionHandler(result: nil, error: NSError(domain: FlickrClient.ERROR_DOMAIN, code: -1006, userInfo: nil))
+
                         }
                     } else {
-                        dispatch_async(dispatch_get_main_queue(), {
-                            self.photoTitleLabel.text = "No Photos Found. Search Again."
-                            self.defaultLabel.alpha = 1.0
-                            self.photoImageView.image = nil
-                        })
+                        var emptyArray = [[String: AnyObject]]()
+                        
+                        completionHandler(result: emptyArray, error: nil)
                     }
                 } else {
                     println("Cant find key 'photos' in \(parsedResult)")
+                    completionHandler(result: nil, error: NSError(domain: FlickrClient.ERROR_DOMAIN, code: -1005, userInfo: nil))
+
                 }
             }
         }
         
         task.resume()
-*/
+
     }
     
     

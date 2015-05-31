@@ -86,7 +86,6 @@ class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetc
     var temporaryAnnotation: MKPointAnnotation?
     
     func handleLongPress(gestureRecognizer : UITapGestureRecognizer) {
-        // seems more natural to add a pin at the beginning of a long press rather than the end
         if (gestureRecognizer.state != UIGestureRecognizerState.Began
             && gestureRecognizer.state != UIGestureRecognizerState.Ended
             && gestureRecognizer.state != UIGestureRecognizerState.Changed) {
@@ -117,11 +116,13 @@ class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetc
                 pin.latitude = touchMapCoordinate.latitude
                 pin.longitude = touchMapCoordinate.longitude
                 
-                
                 CoreDataStackManager.sharedInstance().saveContext()
+                
+                if pin.photos.count == 0 {
+                    PhotoDownloader.sharedInstance().prefetch(pin)
+                }
 
             }
-            //addPin(touchMapCoordinate, withModelUpdate: true)
             break
         default:
             break
@@ -140,12 +141,12 @@ class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetc
         // This invocation prepares the table to recieve a number of changes. It will store them up
         // until it receives endUpdates(), and then perform them all at once.
         //self.tableView.beginUpdates()
-        println("controllerWillChangeContent")
+        //println("controllerWillChangeContent")
     }
     
     func controller(controller: NSFetchedResultsController, didChangeSection sectionInfo: NSFetchedResultsSectionInfo, atIndex sectionIndex: Int, forChangeType type: NSFetchedResultsChangeType) {
         // Our project does not use sections. So we can ignore these invocations.
-        println("didChangeSection")
+        //println("didChangeSection")
     }
     
     //
@@ -153,7 +154,7 @@ class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetc
     //
     
     func controller(controller: NSFetchedResultsController, didChangeObject anObject: AnyObject, atIndexPath indexPath: NSIndexPath?, forChangeType type: NSFetchedResultsChangeType, newIndexPath: NSIndexPath?) {
-        println("didChangeObject \(indexPath)")
+        //println("didChangeObject \(indexPath)")
         if let pin = anObject as? Pin {
             switch type {
             case .Delete:
@@ -185,7 +186,7 @@ class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetc
     // When endUpdates() is invoked, the table makes the changes visible.
     func controllerDidChangeContent(controller: NSFetchedResultsController) {
         //self.tableView.endUpdates()
-        println("controllerDidChangeContent")
+        //println("controllerDidChangeContent")
     }
     
     lazy var fetchedResultsController: NSFetchedResultsController = {
