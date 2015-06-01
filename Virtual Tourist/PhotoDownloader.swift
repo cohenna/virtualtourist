@@ -13,7 +13,15 @@ import UIKit
 class PhotoDownloader {
     
     var downloadInProgress : [Pin: Bool] = [Pin:Bool]()
-    
+    func isDownloadInProgressFor(pin: Pin) -> Bool {
+        if let x = downloadInProgress[pin] {
+            if x {
+                println("other download in progress")
+                return true
+            }
+        }
+        return false
+    }
     class func sharedInstance() -> PhotoDownloader {
         struct Static {
             static let instance = PhotoDownloader()
@@ -46,9 +54,9 @@ class PhotoDownloader {
         FlickrClient.sharedInstance().getPhotos(pin.latitude, longitude: pin.longitude) {
             (result: AnyObject?, error: NSError?) in
             if let error = error {
-                println("error in downloading photos code=\(error.code)")
+                println("prefetch: error in downloading photos code=\(error.code)")
             } else if let photosArray = result as? [[String: AnyObject]] {
-                println("found \(photosArray.count) photos for location, prefetching now")
+                println("prefetch: found \(photosArray.count) photos for location, prefetching now")
                 dispatch_async(dispatch_get_main_queue(), {
                     for photoDictionary in photosArray {
                         //let photoTitle = photoDictionary["title"] as? String
@@ -63,9 +71,9 @@ class PhotoDownloader {
                             if let imageID = photoDictionary["id"] as? Int64 {
                                 photo.id = NSNumber(longLong: imageID)
                             }
-                            println("added photo \(imageUrlString)")
+                            println("prefetch: added photo \(imageUrlString)")
                         } else {
-                            println("error with imageUrlString, skipping")
+                            println("prefetch: error with imageUrlString, skipping")
                         }
                     }
                     
@@ -80,29 +88,42 @@ class PhotoDownloader {
         }
     }
     
+    func needToDownloadPhoto(photo: Photo) -> Bool {
+        if let localPath = photo.localPath {
+            if NSFileManager.defaultManager().fileExistsAtPath(localPath) {
+                println("file already exists, skipping download")
+                return false
+            } else {
+                println("file doesn't exist, should download")
+            }
+        } else {
+            println("has no local path, should download")
+        }
+        return true
+    }
+    
     func downloadPhotos(pin: Pin) {
-        println("pin.photos.count=\(pin.photos.count)")
-        if let x = downloadInProgress[pin] {
-            println("other download in progress")
+        println("downloadPhotos: pin.photos.count=\(pin.photos.count)")
+        
+        if isDownloadInProgressFor(pin) {
+            println("downloadPhotos: another download in progress, quitting")
             return
         }
+        
+        println("downloadPhotos: starting download")
         downloadInProgress[pin] = true
-        for setObject in pin.photos {
-            if let photo = setObject as? Photo {
-                
-                if let localPath = photo.localPath {
-                    if NSFileManager.defaultManager().fileExistsAtPath(localPath) {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), {
+            
+            for setObject in pin.photos {
+                if let photo = setObject as? Photo {
+                    
+                    if !self.needToDownloadPhoto(photo) {
+                        println("do not need to download photo, skipping")
                         continue
-                    } else {
-                        println("file doesn't exist, should download")
                     }
-                } else {
-                    println("has no local path, should download")
-                }
-                
-                let imageURL = NSURL(string: photo.url)
-                
-                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), {
+                    
+                    let imageURL = NSURL(string: photo.url)
+                    
                     
                     if let imageData = NSData(contentsOfURL: imageURL!) {
                         let filename = self.randomStringWithLength(12)
@@ -121,11 +142,15 @@ class PhotoDownloader {
                     } else {
                         println("Image does not exist at \(imageURL)")
                     }
-                })
-            } else {
-                println("setObject is not a Photo")
+                    
+                } else {
+                    println("setObject is not a Photo")
+                }
             }
-        }
+            
+            println("finished download")
+            self.downloadInProgress[pin] = false
+        })
     }
     
 }

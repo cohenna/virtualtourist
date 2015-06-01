@@ -121,19 +121,11 @@ class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetc
                 if pin.photos.count == 0 {
                     PhotoDownloader.sharedInstance().prefetch(pin)
                 }
-
             }
             break
         default:
             break
         }
-        
-
-        
-        
-        
-        
-        
     }
     
     
@@ -208,6 +200,8 @@ class TravelLocationsViewController: UIViewController, MKMapViewDelegate, NSFetc
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
+        var user = PersonHelper.sharedInstance().getUser()
         
         mapView.delegate = self
         

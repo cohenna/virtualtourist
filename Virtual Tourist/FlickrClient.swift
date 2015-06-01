@@ -29,7 +29,7 @@ class FlickrClient : NSObject {
     var LAT_MAX = 90.0
     var LON_MIN = -180.0
     var LON_MAX = 180.0
-    var PHOTOS_PER_PAGE = 48
+    var PHOTOS_PER_PAGE = 4
     
     static let ERROR_DOMAIN = "FlickrClient"
     //var baseImageURLString : String = BASE_URL

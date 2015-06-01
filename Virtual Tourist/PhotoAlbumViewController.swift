@@ -13,16 +13,47 @@ import CoreData
 
 class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDelegate, UICollectionViewDelegate, UICollectionViewDataSource {
     var pin : Pin!
-    var fullyDownloaded = false
+    var numToDelete : Int = 0
+    var CACHE_NAME = "photo_cache_frc"
     
     @IBOutlet weak var mapView: MKMapView!
     @IBOutlet weak var collectionView: UICollectionView!
     @IBOutlet weak var newCollectionButton: UIButton!
     
+    func handleLongPress(gestureRecognizer : UITapGestureRecognizer) {
+        // don't wait for user to pick up press, feels more natural to delete
+        if (gestureRecognizer.state != UIGestureRecognizerState.Began) {
+            return
+        }
+        
+        let touchPoint = gestureRecognizer.locationInView(collectionView)
+        if let indexPath = collectionView.indexPathForItemAtPoint(touchPoint) {
+            deletePhotoAtIndexPath(indexPath)
+        } else {
+            println("handleLongPress: could not find index path")
+        }
+    }
+    
+    override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
+        if segue.identifier == "showPhotoDetailView" {
+            if let photo = sender as? Photo {
+                (segue.destinationViewController as! PhotoDetailViewController).photo = photo
+            } else {
+                println("prepareForSegue: not a photo")
+            }
+        }
+    }
+
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         println("pin coordinate=(\(pin!.latitude),\(pin!.longitude)")
         zoomToLocation()
+        
+        // long press for image view
+        let lpgr = UILongPressGestureRecognizer(target: self, action: Selector("handleLongPress:"))
+        lpgr.minimumPressDuration  = 1.0
+        collectionView.addGestureRecognizer(lpgr)
         
         // Perform the fetch. This gets the machine rolling
         var error: NSError? = nil
@@ -61,10 +92,19 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
         // Change 2. Set this view controller as the fetched results controller's delegate
         fetchedResultsController.delegate = self
         
+        
+        newCollectionButton.enabled = false
         // TODO: add pictures currently available
-        for object in fetchedResultsController.fetchedObjects! {
-            //let pin = object as! Pin
-            //addPinToMapWithPin(pin)
+        if !PhotoDownloader.sharedInstance().isDownloadInProgressFor(pin) {
+            if !allDownloadsFinished() {
+                println("need to download photos")
+                PhotoDownloader.sharedInstance().downloadPhotos(pin)
+            } else {
+                println("do not need to download photos")
+                newCollectionButton.enabled = true
+            }
+        } else {
+            println("download in progress")
         }
         collectionView.delegate = self
         collectionView.dataSource = self
@@ -72,10 +112,24 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
         collectionView.alwaysBounceVertical = true
         collectionView.scrollEnabled = true
         
-        PhotoDownloader.sharedInstance().downloadPhotos(pin)
         println("viewDidLoad complete")
 
         
+    }
+    
+    func allDownloadsFinished() -> Bool {
+        var allDownloadsFinished = true
+        for object in fetchedResultsController.fetchedObjects! {
+            if let photo = object as? Photo {
+                if PhotoDownloader.sharedInstance().needToDownloadPhoto(photo) {
+                    allDownloadsFinished = false
+                    break
+                }
+            } else {
+                println("object not a photo")
+            }
+        }
+        return allDownloadsFinished
     }
     
     func zoomToLocation() {
@@ -96,6 +150,22 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
             self.mapView.setRegion(region, animated: false)
         }
     }
+    func deletePhotoAtIndexPath(indexPath : NSIndexPath) {
+        // delete Photo, only allow delete when all photos are downloaded
+        if PhotoDownloader.sharedInstance().isDownloadInProgressFor(pin) {
+            println("download in progress, cannot delete file")
+            self.showToast("Cannot delete file while download in progress")
+            return
+        }
+        
+        if let photo = self.fetchedResultsController.objectAtIndexPath(indexPath) as? Photo {
+            println("deleting photo")
+            sharedContext.deleteObject(photo)
+            CoreDataStackManager.sharedInstance().saveContext()
+        } else {
+            println("cannot delete photo, not a photo")
+        }
+    }
     
     // =================================================================== //
     // ==================== Collection View Functions ==================== //
@@ -103,14 +173,12 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
     
     // open detail view
     func collectionView(collectionView: UICollectionView, didSelectItemAtIndexPath indexPath: NSIndexPath) {
-        // delete Photo, only allow delete when all photos are downloaded
-        if !fullyDownloaded {
-            return
-        }
-        
+        //deletePhotoAtIndexPath(indexPath)
+        // open up detail view
         if let photo = self.fetchedResultsController.objectAtIndexPath(indexPath) as? Photo {
-            sharedContext.deleteObject(photo)
-            CoreDataStackManager.sharedInstance().saveContext()
+            performSegueWithIdentifier("showPhotoDetailView", sender: photo)
+        } else {
+            println("handleLongPress: object not a photo")
         }
     }
     
@@ -132,10 +200,11 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
                     imageView.image = UIImage(contentsOfFile: localPath)
                     println("using actual image")
                 } else {
+                    imageView.image = UIImage(named: "unknown.png")
                     println("actual image is broken")
                 }
             } else {
-                //imageView.image = UIImage(named: "placeHolder")
+                imageView.image = UIImage(named: "unknown.png")
                 println("using default image")
             }
         }
@@ -165,11 +234,14 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
         // until it receives endUpdates(), and then perform them all at once.
         //self.tableView.beginUpdates()
         println("controllerWillChangeContent")
+        //self.collectionView.
+        //collectionView.reloadData()
     }
     
     func controller(controller: NSFetchedResultsController, didChangeSection sectionInfo: NSFetchedResultsSectionInfo, atIndex sectionIndex: Int, forChangeType type: NSFetchedResultsChangeType) {
         // Our project does not use sections. So we can ignore these invocations.
         println("didChangeSection")
+        //collectionView.reloadData()
     }
     
     //
@@ -177,26 +249,47 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
     //
     
     func controller(controller: NSFetchedResultsController, didChangeObject anObject: AnyObject, atIndexPath indexPath: NSIndexPath?, forChangeType type: NSFetchedResultsChangeType, newIndexPath: NSIndexPath?) {
-        println("didChangeObject \(indexPath)")
+        print("didChangeObject \(indexPath) ")
         //collectionView.reloadData()
         
         if let photo = sanitizePhoto(anObject) {
             if let indexPath = indexPath {
                 switch type {
                 case .Delete:
+                    println(" deleting indexPath.row=\(indexPath.row)")
                     // TODO: remove picture from CollectionView
                     collectionView.deleteItemsAtIndexPaths([indexPath])
-                    println("deleted image at indexPath.row=\(indexPath.row)")
+                    numToDelete -= 1
+                    println("numToDelete=\(numToDelete)")
+                    if numToDelete == 0 {
+                        // download new photos
+                        println("all deleted, download new photos")
+                        
+                        //collectionView.reloadData()
+                        NSFetchedResultsController.deleteCacheWithName(CACHE_NAME)
+                        println("deleted cache")
+                        PhotoDownloader.sharedInstance().prefetch(pin)
+                    }
+                    //println("deleted image at indexPath.row=\(indexPath.row)")
                     break
                 case .Insert:
                     // TODO: add picture to CollectionView if ready, otherwise, placeholder
+                    println(" inserting image at indexPath.row=\(indexPath.row)")
                     collectionView.insertItemsAtIndexPaths([indexPath])
                     println("inserted image at indexPath.row=\(indexPath.row)")
+                    
                     break
                 case .Update:
                     // TODO: add picture if changed from not ready to ready (i.e. path exists)
+                    collectionView.reloadData()
+                    println(" updating image at indexPath.row=\(indexPath.row)")
                     collectionView.reloadItemsAtIndexPaths([indexPath])
                     println("updated image at indexPath.row=\(indexPath.row)")
+                    
+                    if allDownloadsFinished() {
+                        println("all downloads finished, enabling newCollectionButton")
+                        newCollectionButton.enabled = true
+                    }
                     return
                 default:
                     println("default")
@@ -205,6 +298,8 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
             } else {
                 println("didChangeObject invalid indexPath")
             }
+        } else {
+            println("not a Photo object")
         }
         
     }
@@ -230,7 +325,7 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
         fetchRequest.sortDescriptors = [NSSortDescriptor(key: "id", ascending: false)]
         
         // Create the Fetched Results Controller
-        let fetchedResultsController = NSFetchedResultsController(fetchRequest: fetchRequest, managedObjectContext: self.sharedContext, sectionNameKeyPath: nil, cacheName: nil)
+        let fetchedResultsController = NSFetchedResultsController(fetchRequest: fetchRequest, managedObjectContext: self.sharedContext, sectionNameKeyPath: nil, cacheName: self.CACHE_NAME)
         
         //fetchedResultsController.
         //fetchedResultsController.
@@ -241,6 +336,37 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
         } ()
     
     @IBAction func newCollection(sender: AnyObject) {
+        // sanity/safety check
+        if PhotoDownloader.sharedInstance().isDownloadInProgressFor(pin) {
+            println("download in progress, cannot get new collection")
+            self.showToast("Cannot download new collection with another download in progress")
+            return
+        }
+        
+        // delete all current photos
+        numToDelete = fetchedResultsController.fetchedObjects!.count
+        newCollectionButton.enabled = false
+        if numToDelete == 0 {
+            // download new photos
+            println("collection is empty, download immediately")
+            PhotoDownloader.sharedInstance().prefetch(pin)
+            return
+        }
+        println("starting delete, numToDelete=\(numToDelete)")
+
+        for object in fetchedResultsController.fetchedObjects! {
+            if let photo = object as? Photo {
+                sharedContext.deleteObject(photo)
+                CoreDataStackManager.sharedInstance().saveContext()
+            } else {
+                println("newCollection: object not a photo")
+            }
+        }
+        //println("deleted all photos, downloading new photos")
+        
+        
+        
+
     }
     
     override func didReceiveMemoryWarning() {

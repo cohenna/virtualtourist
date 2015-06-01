@@ -122,6 +122,8 @@ class CoreDataStackManager {
             if context.hasChanges && !context.save(&error) {
                 NSLog("Unresolved error \(error), \(error!.userInfo)")
                 abort()
+            } else {
+                println("saveContext context.hasChanges=\(context.hasChanges) hash=\(context.hash)")
             }
         }
     }
