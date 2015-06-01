@@ -14,7 +14,10 @@ import CoreData
 class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDelegate, UICollectionViewDelegate, UICollectionViewDataSource {
     var pin : Pin!
     var numToDelete : Int = 0
-    var CACHE_NAME = "photo_cache_frc"
+
+    lazy var cacheName : String = {
+        return "photo_cache_for_pin_object_id=\(self.pin.objectID)"
+    } ()
     
     @IBOutlet weak var mapView: MKMapView!
     @IBOutlet weak var collectionView: UICollectionView!
@@ -93,6 +96,20 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
         fetchedResultsController.delegate = self
         
         
+        
+        collectionView.delegate = self
+        collectionView.dataSource = self
+        //collectionView.reloadData()
+        collectionView.alwaysBounceVertical = true
+        collectionView.scrollEnabled = true
+        
+        println("viewDidLoad complete")
+
+        
+    }
+    
+    override func viewWillAppear(animated : Bool) {
+        super.viewWillAppear(animated)
         newCollectionButton.enabled = false
         // TODO: add pictures currently available
         if !PhotoDownloader.sharedInstance().isDownloadInProgressFor(pin) {
@@ -105,16 +122,8 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
             }
         } else {
             println("download in progress")
+            newCollectionButton.enabled = false
         }
-        collectionView.delegate = self
-        collectionView.dataSource = self
-        //collectionView.reloadData()
-        collectionView.alwaysBounceVertical = true
-        collectionView.scrollEnabled = true
-        
-        println("viewDidLoad complete")
-
-        
     }
     
     func allDownloadsFinished() -> Bool {
@@ -266,7 +275,7 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
                         println("all deleted, download new photos")
                         
                         //collectionView.reloadData()
-                        NSFetchedResultsController.deleteCacheWithName(CACHE_NAME)
+                        NSFetchedResultsController.deleteCacheWithName(self.cacheName)
                         println("deleted cache")
                         PhotoDownloader.sharedInstance().prefetch(pin)
                     }
@@ -325,7 +334,7 @@ class PhotoAlbumViewController : UIViewController, NSFetchedResultsControllerDel
         fetchRequest.sortDescriptors = [NSSortDescriptor(key: "id", ascending: false)]
         
         // Create the Fetched Results Controller
-        let fetchedResultsController = NSFetchedResultsController(fetchRequest: fetchRequest, managedObjectContext: self.sharedContext, sectionNameKeyPath: nil, cacheName: self.CACHE_NAME)
+        let fetchedResultsController = NSFetchedResultsController(fetchRequest: fetchRequest, managedObjectContext: self.sharedContext, sectionNameKeyPath: nil, cacheName: self.cacheName)
         
         //fetchedResultsController.
         //fetchedResultsController.
